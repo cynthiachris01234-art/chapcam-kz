@@ -17,13 +17,14 @@ export const dynamic = 'force-dynamic'
 //      AUTOMATIQUEMENT (idempotent) les numeros sans SMS / expires / rembourses
 //      par le fournisseur, meme si le client n'a pas garde la page ouverte.
 export async function GET(request: NextRequest) {
-  // Si un CRON_SECRET est defini, on exige le header d'autorisation Vercel Cron.
+  // Fail closed: payment reconciliation must never be publicly callable.
   const secret = process.env.CRON_SECRET
-  if (secret) {
-    const auth = request.headers.get('authorization')
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
+  if (!secret) {
+    console.error('[cron/reconcile-payments] CRON_SECRET missing')
+    return NextResponse.json({ error: 'not configured' }, { status: 503 })
+  }
+  if (request.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
   const payments = await reconcilePendingPaydunya({ maxAgeDays: 3, limit: 100 })
