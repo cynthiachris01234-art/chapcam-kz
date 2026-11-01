@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AccessToken } from 'livekit-server-sdk'
 import { createClient } from '@/lib/supabase/server'
+import { checkLiveAccess } from '@/lib/live-guard'
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,6 +9,12 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error || !user) {
       return NextResponse.json({ success: false, error: 'unauthorized' }, { status: 401 })
+    }
+
+    // Authentication alone does not grant access to paid live infrastructure.
+    const entitlement = await checkLiveAccess(user.id)
+    if (!entitlement.allowed) {
+      return NextResponse.json({ success: false, error: 'live access required' }, { status: 403 })
     }
 
     const body = await request.json()
